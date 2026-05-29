@@ -1,0 +1,322 @@
+// Zynex Store - Database Schema
+// Professional e-commerce platform for digital services
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  phone         String?
+  avatar        String?
+  role          String    @default("customer") // customer, admin
+  isVerified    Boolean   @default(false)
+  balance       Float     @default(0)
+  currency      String    @default("USD")
+
+  // Relations
+  orders        Order[]
+  transactions  Transaction[]
+  tickets       Ticket[]
+  notifications Notification[]
+  wallet        Wallet?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Wallet {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  yemeniWallet  String?   // Phone number for Yemeni wallets
+  walletType    String?   // jeib, jawali, floosk, onecash, mahfazati
+  paypalEmail   String?
+  stripeId      String?
+  binanceId     String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// SERVICES & CATEGORIES
+// ============================================
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  nameEn      String
+  slug        String    @unique
+  description String?
+  icon        String?
+  image       String?
+  color       String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+
+  // Relations
+  services    Service[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String
+  nameEn      String
+  slug        String    @unique
+  description String
+  features    String    // JSON string of features list
+  price       Float
+  priceYER    Float?
+  priceSAR    Float?
+  originalPrice Float?
+  image       String?
+  icon        String?
+  badge       String?   // popular, new, bestseller, limited
+  rating      Float     @default(0)
+  reviewCount Int       @default(0)
+  salesCount  Int       @default(0)
+  deliveryTime String?  // e.g., "0-2 hours", "instant"
+  isAvailable Boolean   @default(true)
+  isFeatured  Boolean   @default(false)
+  sortOrder   Int       @default(0)
+  faq         String?   // JSON string of FAQ items
+  requirements String?  // JSON string of requirements
+
+  // Relations
+  orders      OrderItem[]
+  reviews     Review[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ============================================
+// ORDERS & TRANSACTIONS
+// ============================================
+
+model Order {
+  id            String    @id @default(cuid())
+  orderNumber   String    @unique
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        String    @default("pending") // pending, processing, completed, failed, refunded, cancelled
+  totalAmount   Float
+  currency      String    @default("USD")
+  paymentMethod String?   // jeib, jawali, floosk, onecash, mahfazti, paypal, stripe, binance, crypto
+  paymentStatus String    @default("pending") // pending, paid, failed, refunded
+  paymentId     String?   // External payment reference
+  couponCode    String?
+  discountAmount Float?
+  notes         String?
+
+  // Relations
+  items         OrderItem[]
+  transactions  Transaction[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model OrderItem {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  serviceId   String
+  service     Service   @relation(fields: [serviceId], references: [id])
+  quantity    Int       @default(1)
+  unitPrice   Float
+  totalPrice  Float
+  details     String?   // JSON string - account link, username, etc.
+  status      String    @default("pending") // pending, processing, completed, failed
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Transaction {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId       String?
+  order         Order?    @relation(fields: [orderId], references: [id])
+  type          String    // deposit, payment, refund, withdrawal
+  amount        Float
+  currency      String    @default("USD")
+  status        String    @default("pending") // pending, completed, failed
+  paymentMethod String?
+  paymentDetails String?  // JSON string
+  reference     String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============================================
+// REVIEWS & RATINGS
+// ============================================
+
+model Review {
+  id        String    @id @default(cuid())
+  serviceId String
+  service   Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  userId    String
+  rating    Int       // 1-5
+  comment   String?
+  isVerified Boolean  @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([serviceId, userId])
+}
+
+// ============================================
+// SUPPORT & NOTIFICATIONS
+// ============================================
+
+model Ticket {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     String
+  description String
+  status      String    @default("open") // open, in_progress, resolved, closed
+  priority    String    @default("medium") // low, medium, high, urgent
+  category    String?   // order, payment, service, general
+
+  // Relations
+  messages    TicketMessage[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model TicketMessage {
+  id        String    @id @default(cuid())
+  ticketId  String
+  ticket    Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId  String
+  message   String
+  isAdmin   Boolean   @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String    // order, payment, system, promotion
+  isRead    Boolean   @default(false)
+  link      String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// ============================================
+// COUPONS & PROMOTIONS
+// ============================================
+
+model Coupon {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  discountType  String    // percentage, fixed
+  discountValue Float
+  minOrderAmount Float?
+  maxUses       Int?
+  usedCount     Int       @default(0)
+  validFrom     DateTime
+  validUntil    DateTime
+  isActive      Boolean   @default(true)
+  applicableCategories String? // JSON string of category IDs
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============================================
+// SITE SETTINGS & ANALYTICS
+// ============================================
+
+model SiteSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  type  String @default("text") // text, json, number, boolean
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  eventType String   // page_view, click, purchase, signup
+  userId    String?
+  data      String?  // JSON string
+  page      String?
+  referrer  String?
+  userAgent String?
+  ip        String?
+
+  createdAt DateTime @default(now())
+}
